@@ -3,7 +3,8 @@ name: Unogram Build
 on:
   workflow_dispatch:
   push:
-    branches: [ main ]
+    branches:
+      - main
 
 jobs:
   build:
@@ -11,24 +12,25 @@ jobs:
     timeout-minutes: 360
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
           submodules: recursive
+          fetch-depth: 0
 
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
+      - name: Setup MSVC developer command prompt
+        uses: ilammy/msvc-dev-cmd@v1
+
       - name: Build Unogram
         shell: powershell
         run: |
-          $vcvars = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
-          if (!(Test-Path $vcvars)) {
-            $vcvars = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
-          }
-          cmd /c "call `"$vcvars`" -vcvars_ver=14.44 && set CL_MPCount=4 && powershell -NoProfile -ExecutionPolicy Bypass -File ${{ github.workspace }}\build.ps1"
+          $env:CL="/MP4"
+          powershell -NoProfile -ExecutionPolicy Bypass -File "$env:GITHUB_WORKSPACE\build.ps1"
 
-      - name: Upload Unogram artifacts
+      - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: Unogram-build
@@ -37,5 +39,7 @@ jobs:
             out\**\*.dll
             Telegram\build-out.txt
             Telegram\build-err.txt
+            build-*.log
+            prepare-*.log
           if-no-files-found: warn
           compression-level: 0

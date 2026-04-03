@@ -17,6 +17,7 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 0
+          path: Unogram
 
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
@@ -24,22 +25,35 @@ jobs:
       - name: Setup MSVC developer command prompt
         uses: ilammy/msvc-dev-cmd@v1
 
-      - name: Build Unogram
+      - name: Prepare build folders
         shell: powershell
         run: |
+          New-Item -ItemType Directory -Force -Path "D:\a\Unogram\Libraries" | Out-Null
+          New-Item -ItemType Directory -Force -Path "D:\a\Unogram\ThirdParty" | Out-Null
+
+      - name: Prepare libraries
+        shell: powershell
+        working-directory: D:\a\Unogram
+        run: |
+          & "D:\a\Unogram\Unogram\Telegram\build\prepare\win.bat"
+
+      - name: Build Unogram
+        shell: powershell
+        working-directory: D:\a\Unogram\Unogram
+        run: |
           $env:CL="/MP4"
-          powershell -NoProfile -ExecutionPolicy Bypass -File "$env:GITHUB_WORKSPACE\build.ps1"
+          powershell -NoProfile -ExecutionPolicy Bypass -File ".\build.ps1"
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: Unogram-build
           path: |
-            out\**\*.exe
-            out\**\*.dll
-            Telegram\build-out.txt
-            Telegram\build-err.txt
-            build-*.log
-            prepare-*.log
+            D:\a\Unogram\Unogram\out\**\*.exe
+            D:\a\Unogram\Unogram\out\**\*.dll
+            D:\a\Unogram\Unogram\build-*.log
+            D:\a\Unogram\Unogram\prepare-*.log
+            D:\a\Unogram\Unogram\Telegram\build-out.txt
+            D:\a\Unogram\Unogram\Telegram\build-err.txt
           if-no-files-found: warn
           compression-level: 0

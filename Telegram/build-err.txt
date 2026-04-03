@@ -1,0 +1,3 @@
+Version: 6.7.1
+Resolved NuGet executable: E:/Projects/Unogram/ThirdParty/NuGet/nuget.exe
+Using existing NuGet package: E:/Projects/Unogram/client/out/packages/Microsoft.Web.WebView2

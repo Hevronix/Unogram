@@ -1,6 +1,5 @@
 name: Unogram Build
-
-on:
+on: 
   push:
   workflow_dispatch:
 
@@ -10,87 +9,42 @@ jobs:
     timeout-minutes: 360
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-          fetch-depth: 0
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
 
-      - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v2
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v2
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
 
-      - name: Setup Git config
-        shell: pwsh
-        run: |
-          git config --global core.autocrlf false
-          git submodule sync --recursive
-          git submodule update --init --recursive
+    - name: Setup VS environment
+      uses: ilammy/msvc-dev-cmd@v1
+      with:
+        arch: x64
 
-      - name: Show tree
-        shell: pwsh
-        run: |
-          Write-Host "Repo root:"
-          Get-ChildItem -Force
-          Write-Host "build.ps1 path:"
-          Get-ChildItem -Recurse -Filter build.ps1
-          Write-Host "prepare win.bat path:"
-          Get-ChildItem -Recurse -Filter win.bat | Where-Object { $_.FullName -match "build\\prepare\\win\.bat$" }
+    - name: Show structure
+      shell: cmd
+      run: |
+        dir /s Telegram\build\prepare
+        dir build.ps1
 
-      - name: Prepare Libraries root
-        shell: pwsh
-        run: |
-          $repoRoot = Get-Location
-          $librariesPath = Join-Path $repoRoot "..\Libraries"
-          New-Item -ItemType Directory -Force -Path $librariesPath | Out-Null
-          Write-Host "Libraries path: $librariesPath"
+    - name: Prepare libraries
+      shell: cmd
+      run: Telegram\build\prepare\win.bat
 
-      - name: Prepare third-party libraries
-        shell: cmd
-        run: |
-          if exist Telegram\build\prepare\win.bat (
-            call Telegram\build\prepare\win.bat
-          ) else if exist tdesktop\Telegram\build\prepare\win.bat (
-            call tdesktop\Telegram\build\prepare\win.bat
-          ) else (
-            echo prepare script not found
-            dir /s /b *win.bat
-            exit /b 1
-          )
+    - name: Build
+      shell: cmd
+      run: .\build.ps1
 
-      - name: Configure
-        shell: cmd
-        env:
-          TDESKTOP_API_ID: ${{ secrets.TDESKTOP_API_ID }}
-          TDESKTOP_API_HASH: ${{ secrets.TDESKTOP_API_HASH }}
-        run: |
-          if exist Telegram\configure.bat (
-            call Telegram\configure.bat -D TDESKTOP_API_ID=%TDESKTOP_API_ID% -D TDESKTOP_API_HASH=%TDESKTOP_API_HASH%
-          ) else if exist tdesktop\Telegram\configure.bat (
-            call tdesktop\Telegram\configure.bat -D TDESKTOP_API_ID=%TDESKTOP_API_ID% -D TDESKTOP_API_HASH=%TDESKTOP_API_HASH%
-          ) else (
-            echo configure.bat not found
-            dir /s /b configure.bat
-            exit /b 1
-          )
-
-      - name: Build via build.ps1
-        shell: pwsh
-        run: |
-          .\build.ps1
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: Unogram-build
-          path: |
-            out\Debug\Telegram.exe
-            out\Release\Telegram.exe
-            out\Debug\**\*.dll
-            out\Release\**\*.dll
-          if-no-files-found: warn
-          retention-days: 30
+    - name: Upload result
+      uses: actions/upload-artifact@v4
+      with:
+        name: Unogram-Debug
+        path: |
+          out/Debug/Telegram.exe
+          out/Debug/*.dll
+        retention-days: 30

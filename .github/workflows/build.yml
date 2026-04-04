@@ -1,31 +1,24 @@
-name: Build Client
+name: Unogram Build
 
 on:
   workflow_dispatch:
   push:
-    paths:
-      - "client/**"
-      - "Libraries/**"
-      - ".github/workflows/build.yaml"
   pull_request:
-    paths:
-      - "client/**"
-      - "Libraries/**"
-      - ".github/workflows/build.yaml"
 
 concurrency:
-  group: client-build-${{ github.ref }}
+  group: unogram-build-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build-client:
+  build:
     runs-on: windows-2022
-    timeout-minutes: 180
+    timeout-minutes: 360
     env:
-      BUILD_CACHE_VERSION: v2
+      BUILD_CACHE_VERSION: v3
       BUILD_CONFIGURATION: Debug
       TDESKTOP_API_ID: "17349"
       TDESKTOP_API_HASH: "344583e45741c457fe1862106095a5eb"
+      UNOGRAM_SKIP_BREAKPAD: "1"
 
     steps:
       - name: Checkout
@@ -49,31 +42,25 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: |
-            Libraries/win64/local
-            Libraries/win64/ada/out
-            Libraries/win64/liblcms2/out
-            Libraries/win64/libwebp/out
-            Libraries/win64/openssl3/out
-            Libraries/win64/opus/out
-            Libraries/win64/rnnoise/out
-            Libraries/win64/tde2e/out
-            Libraries/win64/tg_angle/out
-            Libraries/win64/tg_owt/out
-          key: ${{ runner.os }}-deps-${{ env.BUILD_CONFIGURATION }}-${{ env.BUILD_CACHE_VERSION }}-${{ hashFiles('Libraries/win64/cache_keys/**') }}
+            Libraries
+            ThirdParty
+          key: ${{ runner.os }}-deps-${{ env.BUILD_CONFIGURATION }}-${{ env.BUILD_CACHE_VERSION }}-${{ hashFiles('Telegram/build/prepare/prepare.py', 'Telegram/build/prepare/win.bat', 'prepare-client-build.cmd', '.github/workflows/build.yml') }}
           restore-keys: |
             ${{ runner.os }}-deps-${{ env.BUILD_CONFIGURATION }}-${{ env.BUILD_CACHE_VERSION }}-
             ${{ runner.os }}-deps-${{ env.BUILD_CONFIGURATION }}-
 
-      - name: Restore client build cache
-        id: client-cache-restore
+      - name: Restore build cache
+        id: build-cache-restore
         uses: actions/cache/restore@v4
         with:
-          path: client/out
-          key: ${{ runner.os }}-client-out-${{ github.ref_name }}-${{ env.BUILD_CONFIGURATION }}-${{ env.BUILD_CACHE_VERSION }}-${{ hashFiles('client/build.ps1', 'client/Telegram/configure.py', 'client/Telegram/CMakeLists.txt', 'client/Telegram/**/*.cmake', 'client/Telegram/**/*.cpp', 'client/Telegram/**/*.c', 'client/Telegram/**/*.h', 'client/Telegram/**/*.hpp', 'client/Telegram/**/*.ui', 'client/Telegram/**/*.qrc') }}
+          path: |
+            out
+            Telegram.exe
+          key: ${{ runner.os }}-out-${{ github.ref_name }}-${{ env.BUILD_CONFIGURATION }}-${{ env.BUILD_CACHE_VERSION }}-${{ hashFiles('build.ps1', 'Telegram/configure.py', 'Telegram/CMakeLists.txt', 'Telegram/**/*.cmake', 'Telegram/**/*.cpp', 'Telegram/**/*.c', 'Telegram/**/*.h', 'Telegram/**/*.hpp', 'Telegram/**/*.ui', 'Telegram/**/*.qrc', 'cmake/**/*.cmake', 'CMakeLists.txt') }}
           restore-keys: |
-            ${{ runner.os }}-client-out-${{ github.ref_name }}-${{ env.BUILD_CONFIGURATION }}-${{ env.BUILD_CACHE_VERSION }}-
-            ${{ runner.os }}-client-out-${{ github.ref_name }}-${{ env.BUILD_CONFIGURATION }}-
-            ${{ runner.os }}-client-out-${{ env.BUILD_CONFIGURATION }}-
+            ${{ runner.os }}-out-${{ github.ref_name }}-${{ env.BUILD_CONFIGURATION }}-${{ env.BUILD_CACHE_VERSION }}-
+            ${{ runner.os }}-out-${{ github.ref_name }}-${{ env.BUILD_CONFIGURATION }}-
+            ${{ runner.os }}-out-${{ env.BUILD_CONFIGURATION }}-
 
       - name: Cache WebView2 NuGet package
         uses: actions/cache@v4
@@ -85,9 +72,10 @@ jobs:
         shell: pwsh
         run: |
           $required = @(
-            'client\build.ps1',
-            'client\Telegram\configure.py',
-            'Libraries'
+            'build.ps1',
+            'Telegram\configure.py',
+            'Telegram\build\prepare\win.bat',
+            'Telegram'
           )
 
           foreach ($path in $required) {
@@ -96,64 +84,61 @@ jobs:
             }
           }
 
-      - name: Build client
+      - name: Prepare libraries
+        shell: cmd
+        run: Telegram\build\prepare\win.bat skip-release silent
+
+      - name: Build
         shell: pwsh
-        run: |
-          Set-Location client
-          .\build.ps1 *>&1 | Tee-Object -FilePath build-ci.log
+        run: .\build.ps1 *>&1 | Tee-Object -FilePath build-ci.log
 
       - name: Save dependency build cache
         if: always()
         uses: actions/cache/save@v4
         with:
           path: |
-            Libraries/win64/local
-            Libraries/win64/ada/out
-            Libraries/win64/liblcms2/out
-            Libraries/win64/libwebp/out
-            Libraries/win64/openssl3/out
-            Libraries/win64/opus/out
-            Libraries/win64/rnnoise/out
-            Libraries/win64/tde2e/out
-            Libraries/win64/tg_angle/out
-            Libraries/win64/tg_owt/out
+            Libraries
+            ThirdParty
           key: ${{ steps.deps-cache-restore.outputs.cache-primary-key }}
 
-      - name: Save client build cache
+      - name: Save build cache
         if: always()
         uses: actions/cache/save@v4
         with:
-          path: client/out
-          key: ${{ steps.client-cache-restore.outputs.cache-primary-key }}
+          path: |
+            out
+            Telegram.exe
+          key: ${{ steps.build-cache-restore.outputs.cache-primary-key }}
 
       - name: Verify output
         if: success()
         shell: pwsh
         run: |
-          if (-not (Test-Path 'client\Telegram.exe')) {
-            throw 'client\Telegram.exe was not produced.'
+          if ((-not (Test-Path 'Telegram.exe')) -and (-not (Test-Path 'out\Debug\Telegram.exe'))) {
+            throw 'Telegram.exe was not produced.'
           }
 
-      - name: Upload client artifact
+      - name: Upload result
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: Telegram-client-debug
+          name: Unogram-Debug
           if-no-files-found: error
           path: |
-            client/Telegram.exe
-            client/out/Debug/Telegram.exe
+            Telegram.exe
+            out/Debug/Telegram.exe
+            out/Debug/*.dll
 
       - name: Upload build logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: client-build-logs
+          name: unogram-build-logs
           if-no-files-found: warn
           path: |
-            client/build-ci.log
-            client/build-debug-last.log
-            client/build-last.log
-            client/build-live-out.log
-            client/build-live-err.log
-            client/out/CMakeCache.txt
+            build-ci.log
+            build-debug-last.log
+            build-last.log
+            build-live-out.log
+            build-live-err.log
+            out/CMakeCache.txt

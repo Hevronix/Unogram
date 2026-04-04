@@ -3,8 +3,7 @@ name: Unogram Build
 on:
   workflow_dispatch:
   push:
-    branches:
-      - main
+    branches: [ main ]
 
 jobs:
   build:
@@ -12,59 +11,48 @@ jobs:
     timeout-minutes: 360
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
           fetch-depth: 0
-          path: Unogram
 
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
-      - name: Setup MSVC developer command prompt
+      - name: Setup MSVC dev cmd
         uses: ilammy/msvc-dev-cmd@v1
 
-      - name: Prepare build folders
+      - name: Create Libraries & ThirdParty
         shell: powershell
         run: |
-          New-Item -ItemType Directory -Force -Path "D:\a\Unogram\Libraries" | Out-Null
-          New-Item -ItemType Directory -Force -Path "D:\a\Unogram\ThirdParty" | Out-Null
-    
-      - name: Debug paths
-        shell: powershell
-        run: |
-          Write-Host "GITHUB_WORKSPACE=$env:GITHUB_WORKSPACE"
-          Write-Host "ROOT CONTENT:"
-          Get-ChildItem "$env:GITHUB_WORKSPACE" | Select-Object Name, FullName
-          Write-Host "TELEGRAM TREE:"
-          Get-ChildItem "$env:GITHUB_WORKSPACE\Telegram" -Recurse -Depth 3 -ErrorAction SilentlyContinue | Select-Object FullName
-          Write-Host "PREPARE TREE:"
-          Get-ChildItem "$env:GITHUB_WORKSPACE" -Recurse -Filter win.bat -ErrorAction SilentlyContinue | Select-Object FullName
-     
+          $buildRoot = Split-Path (Split-Path $env:GITHUB_WORKSPACE) -Parent
+          New-Item -ItemType Directory -Force -Path "$buildRoot\Libraries" | Out-Null
+          New-Item -ItemType Directory -Force -Path "$buildRoot\ThirdParty" | Out-Null
+          Write-Host "Libraries: $buildRoot\Libraries"
+          Write-Host "ThirdParty: $buildRoot\ThirdParty"
+
       - name: Prepare libraries
-        shell: powershell
-        working-directory: D:\a\Unogram
+        shell: cmd
         run: |
-          & "D:\a\Unogram\Unogram\Telegram\build\prepare\win.bat"
+          for /f "delims=" %%i in ("%GITHUB_WORKSPACE%") do set "parent=%%~dpi"
+          for /f "delims=" %%i in ("%parent%") do set "grandparent=%%~dpi"
+          cd /d "%grandparent%"
+          call "%GITHUB_WORKSPACE%\Telegram\build\prepare\win.bat"
 
       - name: Build Unogram
         shell: powershell
-        working-directory: D:\a\Unogram\Unogram
         run: |
-          $env:CL="/MP4"
-          powershell -NoProfile -ExecutionPolicy Bypass -File ".\build.ps1"
+          $env:CL = "/MP4"
+          & "$env:GITHUB_WORKSPACE\build.ps1"
 
-      - name: Upload build artifacts
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: Unogram-build
           path: |
-            D:\a\Unogram\Unogram\out\**\*.exe
-            D:\a\Unogram\Unogram\out\**\*.dll
-            D:\a\Unogram\Unogram\build-*.log
-            D:\a\Unogram\Unogram\prepare-*.log
-            D:\a\Unogram\Unogram\Telegram\build-out.txt
-            D:\a\Unogram\Unogram\Telegram\build-err.txt
+            out\**\*.exe
+            out\**\*.dll
+            **\build-*.log
+            **\prepare-*.log
           if-no-files-found: warn
-          compression-level: 0

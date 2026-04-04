@@ -1,30 +1,27 @@
-name: Build Telegram Desktop
-on: 
+name: Unogram Build
+
+on:
   push:
-  workflow_dispatch:  # кнопка "Run workflow" в UI
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: windows-2022
+
     steps:
-    - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0  # для полного git history
-    
-    - name: Setup MSBuild
-      uses: microsoft/setup-msbuild@v2
-    
-    - name: Build
-      shell: pwsh
-      run: |
-        cd client
-        .\build.ps1
-      
-    - name: Upload artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: Telegram-Desktop-Debug
-        path: |
-          client/out/Release/Telegram.exe
-          client/out/Release/*.dll
-        retention-days: 30
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Show files
+        shell: pwsh
+        run: |
+          Get-ChildItem -Force
+          Get-ChildItem -Recurse -Filter build.ps1
+
+      - name: Build
+        shell: pwsh
+        run: |
+          .\build.ps1

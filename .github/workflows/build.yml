@@ -1,0 +1,159 @@
+name: Build Client
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "client/**"
+      - "Libraries/**"
+      - ".github/workflows/build.yaml"
+  pull_request:
+    paths:
+      - "client/**"
+      - "Libraries/**"
+      - ".github/workflows/build.yaml"
+
+concurrency:
+  group: client-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-client:
+    runs-on: windows-2022
+    timeout-minutes: 180
+    env:
+      BUILD_CACHE_VERSION: v2
+      BUILD_CONFIGURATION: Debug
+      TDESKTOP_API_ID: "17349"
+      TDESKTOP_API_HASH: "344583e45741c457fe1862106095a5eb"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+          submodules: recursive
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Restore dependency build cache
+        id: deps-cache-restore
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            Libraries/win64/local
+            Libraries/win64/ada/out
+            Libraries/win64/liblcms2/out
+            Libraries/win64/libwebp/out
+            Libraries/win64/openssl3/out
+            Libraries/win64/opus/out
+            Libraries/win64/rnnoise/out
+            Libraries/win64/tde2e/out
+            Libraries/win64/tg_angle/out
+            Libraries/win64/tg_owt/out
+          key: ${{ runner.os }}-deps-${{ env.BUILD_CONFIGURATION }}-${{ env.BUILD_CACHE_VERSION }}-${{ hashFiles('Libraries/win64/cache_keys/**') }}
+          restore-keys: |
+            ${{ runner.os }}-deps-${{ env.BUILD_CONFIGURATION }}-${{ env.BUILD_CACHE_VERSION }}-
+            ${{ runner.os }}-deps-${{ env.BUILD_CONFIGURATION }}-
+
+      - name: Restore client build cache
+        id: client-cache-restore
+        uses: actions/cache/restore@v4
+        with:
+          path: client/out
+          key: ${{ runner.os }}-client-out-${{ github.ref_name }}-${{ env.BUILD_CONFIGURATION }}-${{ env.BUILD_CACHE_VERSION }}-${{ hashFiles('client/build.ps1', 'client/Telegram/configure.py', 'client/Telegram/CMakeLists.txt', 'client/Telegram/**/*.cmake', 'client/Telegram/**/*.cpp', 'client/Telegram/**/*.c', 'client/Telegram/**/*.h', 'client/Telegram/**/*.hpp', 'client/Telegram/**/*.ui', 'client/Telegram/**/*.qrc') }}
+          restore-keys: |
+            ${{ runner.os }}-client-out-${{ github.ref_name }}-${{ env.BUILD_CONFIGURATION }}-${{ env.BUILD_CACHE_VERSION }}-
+            ${{ runner.os }}-client-out-${{ github.ref_name }}-${{ env.BUILD_CONFIGURATION }}-
+            ${{ runner.os }}-client-out-${{ env.BUILD_CONFIGURATION }}-
+
+      - name: Cache WebView2 NuGet package
+        uses: actions/cache@v4
+        with:
+          path: ~\.nuget\packages\microsoft.web.webview2
+          key: ${{ runner.os }}-webview2-1.0.1901.177
+
+      - name: Verify required paths
+        shell: pwsh
+        run: |
+          $required = @(
+            'client\build.ps1',
+            'client\Telegram\configure.py',
+            'Libraries'
+          )
+
+          foreach ($path in $required) {
+            if (-not (Test-Path $path)) {
+              throw "Missing required path: $path"
+            }
+          }
+
+      - name: Build client
+        shell: pwsh
+        run: |
+          Set-Location client
+          .\build.ps1 *>&1 | Tee-Object -FilePath build-ci.log
+
+      - name: Save dependency build cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            Libraries/win64/local
+            Libraries/win64/ada/out
+            Libraries/win64/liblcms2/out
+            Libraries/win64/libwebp/out
+            Libraries/win64/openssl3/out
+            Libraries/win64/opus/out
+            Libraries/win64/rnnoise/out
+            Libraries/win64/tde2e/out
+            Libraries/win64/tg_angle/out
+            Libraries/win64/tg_owt/out
+          key: ${{ steps.deps-cache-restore.outputs.cache-primary-key }}
+
+      - name: Save client build cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: client/out
+          key: ${{ steps.client-cache-restore.outputs.cache-primary-key }}
+
+      - name: Verify output
+        if: success()
+        shell: pwsh
+        run: |
+          if (-not (Test-Path 'client\Telegram.exe')) {
+            throw 'client\Telegram.exe was not produced.'
+          }
+
+      - name: Upload client artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Telegram-client-debug
+          if-no-files-found: error
+          path: |
+            client/Telegram.exe
+            client/out/Debug/Telegram.exe
+
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: client-build-logs
+          if-no-files-found: warn
+          path: |
+            client/build-ci.log
+            client/build-debug-last.log
+            client/build-last.log
+            client/build-live-out.log
+            client/build-live-err.log
+            client/out/CMakeCache.txt

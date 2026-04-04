@@ -78,3 +78,9 @@ build-last.log
 build-debug-last.log
 build-live-err.log
 build-live-out.log
+
+# Local workspace helpers
+/.tmp/
+/.sixth/
+**/.agents/
+**/.claude/

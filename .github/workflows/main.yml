@@ -1,5 +1,6 @@
 name: Unogram Build
-on: 
+
+on:
   push:
   workflow_dispatch:
 
@@ -31,6 +32,15 @@ jobs:
       run: |
         dir /s Telegram\build\prepare
         dir build.ps1
+
+    - name: Patch prepare script
+      shell: powershell
+      run: |
+        $path = "Telegram\build\prepare\win.bat"
+        $content = Get-Content $path -Raw
+        $content = $content -replace "call %FullScriptPath% %1 %2 %3 %4 %5", "call %FullScriptPath% -DDESKTOP_APP_DISABLE_BREAKPAD=ON -DDESKTOP_APP_DISABLE_OPENAL=ON %1 %2 %3 %4 %5"
+        Set-Content $path $content -Encoding ASCII
+        Get-Content $path
 
     - name: Prepare libraries
       shell: cmd

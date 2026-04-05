@@ -14,7 +14,7 @@ jobs:
     runs-on: windows-2022
     timeout-minutes: 360
     env:
-      BUILD_CACHE_VERSION: v3
+      BUILD_CACHE_VERSION: v4
       BUILD_CONFIGURATION: Debug
       TDESKTOP_API_ID: "17349"
       TDESKTOP_API_HASH: "344583e45741c457fe1862106095a5eb"

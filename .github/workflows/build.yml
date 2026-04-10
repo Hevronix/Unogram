@@ -39,7 +39,7 @@ jobs:
 
       - name: Restore dependency build cache
         id: deps-cache-restore
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: |
             Libraries
@@ -51,7 +51,7 @@ jobs:
 
       - name: Restore build cache
         id: build-cache-restore
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: |
             out
@@ -63,7 +63,7 @@ jobs:
             ${{ runner.os }}-out-${{ env.BUILD_CONFIGURATION }}-
 
       - name: Cache WebView2 NuGet package
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~\.nuget\packages\microsoft.web.webview2
           key: ${{ runner.os }}-webview2-1.0.1901.177
@@ -94,7 +94,7 @@ jobs:
 
       - name: Save dependency build cache
         if: always()
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: |
             Libraries
@@ -103,7 +103,7 @@ jobs:
 
       - name: Save build cache
         if: always()
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: |
             out
